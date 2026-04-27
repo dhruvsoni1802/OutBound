@@ -34,7 +34,7 @@ export function Sidebar({ userEmail }: SidebarProps) {
     <aside className="flex w-60 flex-shrink-0 flex-col border-r border-border bg-card px-4 py-8">
       {/* Logo */}
       <div className="mb-8 px-2">
-        <Image src="/logo.svg" alt="Embra" width={80} height={22} priority />
+        <Image src="/logo.svg" alt="OutBound" width={96} height={22} priority />
       </div>
 
       {/* Nav */}

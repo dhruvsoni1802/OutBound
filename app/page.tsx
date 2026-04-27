@@ -34,7 +34,7 @@ export default async function LoginPage() {
           <div className="mb-8 flex justify-center">
             <Image
               src="/logo.svg"
-              alt="Embra"
+              alt="OutBound"
               width={100}
               height={28}
               priority
@@ -43,7 +43,7 @@ export default async function LoginPage() {
 
           {/* Tagline */}
           <h1 className="mb-1 text-center font-display text-xl font-semibold tracking-tight text-foreground">
-            Welcome to Embra
+            Welcome to OutBound
           </h1>
           <p className="mb-8 text-center text-sm text-muted-foreground">
             Autonomous email outreach, powered by AI

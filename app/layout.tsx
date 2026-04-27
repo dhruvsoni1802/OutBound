@@ -16,7 +16,7 @@ const dmSans = DM_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'Embra — Autonomous Email Outreach',
+  title: 'OutBound — Autonomous Email Outreach',
   description: 'Autonomous email outreach, powered by AI',
 }
 
