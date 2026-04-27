@@ -29,15 +29,20 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user && request.nextUrl.pathname.startsWith('/settings')) {
+  const { pathname } = request.nextUrl
+
+  const isProtected =
+    pathname.startsWith('/settings') || pathname.startsWith('/campaigns')
+
+  if (!user && isProtected) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
-  if (user && request.nextUrl.pathname === '/') {
+  if (user && pathname === '/') {
     const url = request.nextUrl.clone()
-    url.pathname = '/settings/integrations'
+    url.pathname = '/campaigns'
     return NextResponse.redirect(url)
   }
 

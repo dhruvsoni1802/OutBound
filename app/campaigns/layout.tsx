@@ -1,9 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TopNav } from '@/components/layout/TopNav'
-import { Sidebar } from '@/components/settings/Sidebar'
 
-export default async function SettingsLayout({
+export default async function CampaignsLayout({
   children,
 }: {
   children: React.ReactNode
@@ -18,12 +17,9 @@ export default async function SettingsLayout({
   return (
     <div className="flex min-h-screen flex-col">
       <TopNav userEmail={user.email ?? ''} />
-      <div className="flex flex-1">
-        <Sidebar />
-        <main className="flex flex-1 flex-col px-6 py-10 md:px-12">
-          <div className="mx-auto w-full max-w-[1100px]">{children}</div>
-        </main>
-      </div>
+      <main className="flex flex-1 flex-col px-6 py-10 md:px-12">
+        <div className="mx-auto w-full max-w-[1100px]">{children}</div>
+      </main>
     </div>
   )
 }

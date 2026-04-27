@@ -8,8 +8,19 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
+
     if (!error) {
-      return NextResponse.redirect(`${origin}/settings/integrations`)
+      const { data: campaigns } = await supabase
+        .from('campaigns')
+        .select('id')
+        .limit(1)
+
+      const destination =
+        campaigns && campaigns.length > 0
+          ? '/campaigns'
+          : '/settings/integrations'
+
+      return NextResponse.redirect(`${origin}${destination}`)
     }
   }
 

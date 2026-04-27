@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Sora, DM_Sans } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import './globals.css'
 
 const sora = Sora({
@@ -31,8 +32,10 @@ export default function RootLayout({
       className={`dark ${sora.variable} ${dmSans.variable}`}
     >
       <body className="min-h-screen bg-background text-foreground antialiased">
-        {children}
-        <Toaster richColors position="top-right" />
+        <TooltipProvider>
+          {children}
+          <Toaster richColors position="top-right" />
+        </TooltipProvider>
       </body>
     </html>
   )
