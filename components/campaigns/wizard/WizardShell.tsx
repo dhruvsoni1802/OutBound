@@ -3,18 +3,26 @@
 import { useReducer, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { Check } from 'lucide-react'
 import type { AgentTone } from '@/types/campaign'
-import type { ContactRow } from '@/lib/validation/campaign'
+import type { ContactRow, CampaignType } from '@/lib/validation/campaign'
+import { getCampaignTypeConfig } from '@/lib/campaignTypes/registry'
 import { Step1_CampaignMeta } from './Step1_CampaignMeta'
+import { Step1b_CampaignType } from './Step1b_CampaignType'
 import { Step2_Persona } from './Step2_Persona'
+import { Step2b_CampaignContext } from './Step2b_CampaignContext'
 import { Step3_Sequence } from './Step3_Sequence'
+import { Step4_Attachments } from './Step4_Attachments'
 import { Step4_Contacts } from './Step4_Contacts'
-import { Step5_Review } from './Step5_Review'
+import { Step6_Review } from './Step6_Review'
 
 const STEPS = [
   'Campaign Info',
+  'Campaign Type',
   'Agent Persona',
+  'Campaign Context',
   'Sequence',
+  'Attachments',
   'Contacts',
   'Review',
 ]
@@ -34,13 +42,20 @@ interface WizardState {
   step: number
   config: WizardConfig
   contacts: ContactRow[]
+  campaignType: CampaignType | null
+  contextFields: Record<string, unknown>
+  attachments: File[]
 }
 
 type WizardAction =
   | { type: 'SET_CONFIG'; payload: Partial<WizardConfig> }
   | { type: 'SET_CONTACTS'; payload: ContactRow[] }
+  | { type: 'SET_CAMPAIGN_TYPE'; payload: CampaignType }
+  | { type: 'SET_CONTEXT_FIELDS'; payload: Record<string, unknown> }
+  | { type: 'SET_ATTACHMENTS'; payload: File[] }
   | { type: 'NEXT' }
   | { type: 'PREV' }
+  | { type: 'SKIP_TO'; payload: number }
 
 const initialConfig: WizardConfig = {
   name: '',
@@ -59,32 +74,70 @@ function reducer(state: WizardState, action: WizardAction): WizardState {
       return { ...state, config: { ...state.config, ...action.payload } }
     case 'SET_CONTACTS':
       return { ...state, contacts: action.payload }
+    case 'SET_CAMPAIGN_TYPE':
+      return { ...state, campaignType: action.payload, contextFields: {} }
+    case 'SET_CONTEXT_FIELDS':
+      return {
+        ...state,
+        contextFields: { ...state.contextFields, ...action.payload },
+      }
+    case 'SET_ATTACHMENTS':
+      return { ...state, attachments: action.payload }
     case 'NEXT':
       return { ...state, step: Math.min(state.step + 1, STEPS.length - 1) }
     case 'PREV':
       return { ...state, step: Math.max(state.step - 1, 0) }
+    case 'SKIP_TO':
+      return { ...state, step: action.payload }
     default:
       return state
   }
 }
 
-function canAdvance(step: number, config: WizardConfig, contacts: ContactRow[]) {
+function isContextValid(
+  type: CampaignType | null,
+  fields: Record<string, unknown>
+): boolean {
+  if (!type) return false
+  return getCampaignTypeConfig(type)?.validateContext(fields) ?? false
+}
+
+function canAdvance(state: WizardState): boolean {
+  const { step, config, contacts, campaignType, contextFields } = state
   switch (step) {
     case 0:
       return config.name.trim().length >= 3 && config.goal.trim().length >= 10
     case 1:
+      return campaignType !== null
+    case 2:
       return (
         config.agentName.trim().length >= 2 &&
         config.agentCompany.trim().length >= 2 &&
         config.agentTone !== ''
       )
-    case 2:
-      return true
     case 3:
+      return isContextValid(campaignType, contextFields)
+    case 4:
+      return true
+    case 5:
+      return true
+    case 6:
       return contacts.length > 0
     default:
       return false
   }
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1])
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
 }
 
 export function WizardShell() {
@@ -93,18 +146,34 @@ export function WizardShell() {
     step: 0,
     config: initialConfig,
     contacts: [],
+    campaignType: null,
+    contextFields: {},
+    attachments: [],
   })
   const [submitting, setSubmitting] = useState(false)
 
-  const { step, config, contacts } = state
+  const { step, config, contacts, campaignType, contextFields, attachments } = state
 
   async function handleSubmit() {
     setSubmitting(true)
     try {
+      const attachmentPayloads = await Promise.all(
+        attachments.map(async (file) => ({
+          filename: file.name,
+          contentType: file.type,
+          data: await fileToBase64(file),
+        }))
+      )
       const res = await fetch('/api/campaigns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config, contacts }),
+        body: JSON.stringify({
+          config,
+          contacts,
+          campaign_type: campaignType ?? 'custom',
+          context_fields: contextFields,
+          attachments: attachmentPayloads,
+        }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -120,10 +189,8 @@ export function WizardShell() {
     }
   }
 
-  const setConfig = (payload: Partial<WizardConfig>) =>
-    dispatch({ type: 'SET_CONFIG', payload })
-  const setContacts = (payload: ContactRow[]) =>
-    dispatch({ type: 'SET_CONTACTS', payload })
+  const isLastStep = step === STEPS.length - 1
+  const advance = canAdvance(state)
 
   return (
     <div className="animate-fade-in">
@@ -138,37 +205,78 @@ export function WizardShell() {
       </div>
 
       {/* Progress bar */}
-      <div className="mb-8 flex gap-1.5">
+      <div className="mb-8 flex items-center gap-1">
         {STEPS.map((label, i) => (
-          <div
-            key={label}
-            className="h-1 flex-1 rounded-full transition-colors duration-300"
-            style={{
-              backgroundColor:
-                i <= step
-                  ? 'var(--color-primary)'
-                  : 'var(--color-border)',
-            }}
-          />
+          <div key={label} className="flex flex-1 items-center">
+            <div
+              className="h-1 flex-1 rounded-full transition-colors duration-300"
+              style={{
+                backgroundColor:
+                  i < step
+                    ? 'var(--color-primary)'
+                    : i === step
+                      ? 'var(--color-primary)'
+                      : 'var(--color-border)',
+                opacity: i < step ? 1 : i === step ? 1 : 0.4,
+              }}
+            />
+            {i < step && (
+              <Check
+                className="mx-0.5 h-3 w-3 shrink-0 text-primary"
+                strokeWidth={3}
+              />
+            )}
+          </div>
         ))}
       </div>
 
       {/* Step content */}
       <div className="rounded-xl border border-border bg-card p-6 md:p-8">
         {step === 0 && (
-          <Step1_CampaignMeta config={config} onChange={setConfig} />
+          <Step1_CampaignMeta config={config} onChange={(p) => dispatch({ type: 'SET_CONFIG', payload: p })} />
         )}
         {step === 1 && (
-          <Step2_Persona config={config} onChange={setConfig} />
+          <Step1b_CampaignType
+            value={campaignType}
+            onChange={(t) => dispatch({ type: 'SET_CAMPAIGN_TYPE', payload: t })}
+          />
         )}
         {step === 2 && (
-          <Step3_Sequence config={config} onChange={setConfig} />
+          <Step2_Persona config={config} onChange={(p) => dispatch({ type: 'SET_CONFIG', payload: p })} />
         )}
-        {step === 3 && (
-          <Step4_Contacts contacts={contacts} onChange={setContacts} />
+        {step === 3 && campaignType && (
+          <Step2b_CampaignContext
+            campaignType={campaignType}
+            value={contextFields}
+            onChange={(p) => dispatch({ type: 'SET_CONTEXT_FIELDS', payload: p })}
+          />
         )}
         {step === 4 && (
-          <Step5_Review config={config} contacts={contacts} />
+          <Step3_Sequence config={config} onChange={(p) => dispatch({ type: 'SET_CONFIG', payload: p })} />
+        )}
+        {step === 5 && campaignType && (
+          <Step4_Attachments
+            campaignType={campaignType}
+            contextFields={contextFields}
+            files={attachments}
+            onChange={(f) => dispatch({ type: 'SET_ATTACHMENTS', payload: f })}
+            onSkip={() => dispatch({ type: 'SKIP_TO', payload: 6 })}
+          />
+        )}
+        {step === 6 && (
+          <Step4_Contacts
+            contacts={contacts}
+            onChange={(c) => dispatch({ type: 'SET_CONTACTS', payload: c })}
+          />
+        )}
+        {step === 7 && (
+          <Step6_Review
+            config={config}
+            contacts={contacts}
+            campaignType={campaignType}
+            contextFields={contextFields}
+            attachmentCount={attachments.length}
+          />
         )}
       </div>
 
@@ -182,10 +290,10 @@ export function WizardShell() {
           Back
         </button>
 
-        {step < STEPS.length - 1 ? (
+        {!isLastStep ? (
           <button
             onClick={() => dispatch({ type: 'NEXT' })}
-            disabled={!canAdvance(step, config, contacts)}
+            disabled={!advance}
             className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40"
           >
             Continue

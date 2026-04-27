@@ -1,4 +1,4 @@
-import type { AgentTone, CampaignStatus, ContactStatus } from './campaign'
+import type { AgentTone, CampaignStatus, CampaignType, ContactStatus } from './campaign'
 
 export type Database = {
   public: {
@@ -83,6 +83,10 @@ export type Database = {
           emails_replied: number
           conversions: number
           config_snapshot: Record<string, unknown>
+          inbox_id: string | null
+          webhook_id: string | null
+          campaign_type: CampaignType
+          context_fields: Record<string, unknown>
           created_at: string
           updated_at: string
         }
@@ -102,6 +106,10 @@ export type Database = {
           emails_replied?: number
           conversions?: number
           config_snapshot: Record<string, unknown>
+          inbox_id?: string | null
+          webhook_id?: string | null
+          campaign_type?: CampaignType
+          context_fields?: Record<string, unknown>
           created_at?: string
           updated_at?: string
         }
@@ -121,6 +129,10 @@ export type Database = {
           emails_replied?: number
           conversions?: number
           config_snapshot?: Record<string, unknown>
+          inbox_id?: string | null
+          webhook_id?: string | null
+          campaign_type?: CampaignType
+          context_fields?: Record<string, unknown>
           created_at?: string
           updated_at?: string
         }
@@ -180,6 +192,39 @@ export type Database = {
           last_contacted_at?: string | null
           created_at?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      campaign_attachments: {
+        Row: {
+          id: string
+          campaign_id: string
+          user_id: string
+          filename: string
+          storage_key: string
+          content_type: string
+          size_bytes: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          campaign_id: string
+          user_id: string
+          filename: string
+          storage_key: string
+          content_type: string
+          size_bytes: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          campaign_id?: string
+          user_id?: string
+          filename?: string
+          storage_key?: string
+          content_type?: string
+          size_bytes?: number
+          created_at?: string
         }
         Relationships: []
       }

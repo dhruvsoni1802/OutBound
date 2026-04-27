@@ -1,15 +1,13 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Zap } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { Campaign, Contact, CampaignStatus } from '@/types/campaign'
+import { ActivateCampaignButton } from '@/components/campaigns/ActivateCampaignButton'
+import { ContactsPollingTable } from '@/components/campaigns/ContactsPollingTable'
+import { getCampaignDetail } from '@/lib/server/queries/campaigns'
+import type { CampaignStatus } from '@/types/campaign'
 
 const STATUS_CONFIG: Record<CampaignStatus, { label: string; className: string }> = {
   draft: { label: 'Draft', className: 'bg-muted text-muted-foreground' },
@@ -17,16 +15,6 @@ const STATUS_CONFIG: Record<CampaignStatus, { label: string; className: string }
   paused: { label: 'Paused', className: 'bg-amber-500/15 text-amber-400' },
   completed: { label: 'Completed', className: 'bg-primary/15 text-primary' },
   archived: { label: 'Archived', className: 'bg-muted text-muted-foreground/60' },
-}
-
-const CONTACT_STATUS_LABELS: Record<string, string> = {
-  pending: 'Pending',
-  contacted: 'Contacted',
-  replied: 'Replied',
-  converted: 'Converted',
-  opted_out: 'Opted out',
-  bounced: 'Bounced',
-  declined: 'Declined',
 }
 
 const TONE_LABELS: Record<string, string> = {
@@ -47,25 +35,14 @@ export default async function CampaignDetailPage({
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { data: campaign } = await supabase
-    .from('campaigns')
-    .select('*')
-    .eq('id', id)
-    .eq('user_id', user!.id)
-    .single()
+  const detail = await getCampaignDetail(id, user!.id)
+  if (!detail) notFound()
 
-  if (!campaign) notFound()
-
-  const { data: contacts } = await supabase
-    .from('contacts')
-    .select('*')
-    .eq('campaign_id', id)
-    .order('created_at', { ascending: true })
-
-  const c = campaign as Campaign
-  const contactList = (contacts ?? []) as Contact[]
+  const { campaign: c, contacts: contactList } = detail
 
   const { label, className } = STATUS_CONFIG[c.status]
+  const agentIsActive =
+    c.status === 'active' && contactList.some((ct) => ct.status !== 'pending')
   const replyRate =
     c.emails_sent > 0
       ? Math.round((c.emails_replied / c.emails_sent) * 100)
@@ -91,23 +68,21 @@ export default async function CampaignDetailPage({
               <Badge className={cn('text-xs font-medium', className)}>
                 {label}
               </Badge>
+              {c.status === 'active' && (
+                <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full bg-emerald-400 ${agentIsActive ? 'animate-pulse' : 'opacity-50'}`}
+                  />
+                  {agentIsActive ? 'Agent running' : 'Agent queued'}
+                </span>
+              )}
             </div>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
               {c.goal}
             </p>
           </div>
 
-          <Tooltip>
-            <TooltipTrigger
-              disabled
-              aria-disabled="true"
-              className="flex cursor-not-allowed items-center gap-2 rounded-lg bg-primary/40 px-4 py-2 text-sm font-medium text-white/60"
-            >
-              <Zap className="h-4 w-4" />
-              Activate Campaign
-            </TooltipTrigger>
-            <TooltipContent>Coming in the next release</TooltipContent>
-          </Tooltip>
+          <ActivateCampaignButton campaignId={c.id} initialStatus={c.status} />
         </div>
       </div>
 
@@ -165,67 +140,17 @@ export default async function CampaignDetailPage({
           </h2>
         </div>
 
-        {contactList.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-            No contacts attached to this campaign.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  {['Name', 'Email', 'Company', 'Role', 'Status'].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {contactList.map((contact) => (
-                  <tr
-                    key={contact.id}
-                    className="border-b border-border last:border-0 hover:bg-accent/30"
-                  >
-                    <td className="px-4 py-2.5 text-foreground">
-                      {contact.first_name}
-                      {contact.last_name ? ` ${contact.last_name}` : ''}
-                    </td>
-                    <td className="px-4 py-2.5 text-muted-foreground">
-                      {contact.email}
-                    </td>
-                    <td className="px-4 py-2.5 text-muted-foreground">
-                      {contact.company ?? '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-muted-foreground">
-                      {contact.role ?? '—'}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                        {CONTACT_STATUS_LABELS[contact.status] ?? contact.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <ContactsPollingTable
+          campaignId={c.id}
+          campaignStatus={c.status}
+          initialContacts={contactList}
+        />
       </div>
     </div>
   )
 }
 
-function ConfigRow({
-  label,
-  value,
-}: {
-  label: string
-  value: string | number
-}) {
+function ConfigRow({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>

@@ -2,6 +2,13 @@ export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed' | 'arch
 
 export type AgentTone = 'professional' | 'friendly' | 'direct' | 'consultative'
 
+export type CampaignType =
+  | 'recruitment_outreach'
+  | 'sales_outreach'
+  | 'investor_outreach'
+  | 'partnership_outreach'
+  | 'custom'
+
 export type ContactStatus =
   | 'pending'
   | 'contacted'
@@ -27,6 +34,12 @@ export interface Campaign {
   emails_replied: number
   conversions: number
   config_snapshot: Record<string, unknown>
+  // Phase 3 additions (migration 005)
+  inbox_id: string | null
+  webhook_id: string | null
+  // Phase 3.5 additions (migration 006)
+  campaign_type: CampaignType
+  context_fields: Record<string, unknown>
   created_at: string
   updated_at: string
 }
@@ -48,4 +61,15 @@ export interface Contact {
   last_contacted_at: string | null
   created_at: string
   updated_at: string
+}
+
+export interface CampaignAttachment {
+  id: string
+  campaign_id: string
+  user_id: string
+  filename: string
+  storage_key: string
+  content_type: string
+  size_bytes: number
+  created_at: string
 }

@@ -4,7 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { buttonVariants } from '@/components/ui/button'
 import { CampaignCard } from '@/components/campaigns/CampaignCard'
 import { CampaignStatsBar } from '@/components/campaigns/CampaignStatsBar'
-import type { Campaign } from '@/types/campaign'
+import {
+  listUserCampaigns,
+  computeCampaignListStats,
+} from '@/lib/server/queries/campaigns'
 
 export default async function CampaignsPage() {
   const supabase = await createClient()
@@ -12,19 +15,9 @@ export default async function CampaignsPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { data: campaigns } = await supabase
-    .from('campaigns')
-    .select('*')
-    .eq('user_id', user!.id)
-    .order('created_at', { ascending: false })
-
-  const list = (campaigns ?? []) as Campaign[]
-
-  const totalSent = list.reduce((s, c) => s + c.emails_sent, 0)
-  const totalReplied = list.reduce((s, c) => s + c.emails_replied, 0)
-  const totalConversions = list.reduce((s, c) => s + c.conversions, 0)
-  const overallRate =
-    totalSent > 0 ? Math.round((totalReplied / totalSent) * 100) : 0
+  const list = await listUserCampaigns(user!.id)
+  const { totalSent, totalReplied, totalConversions, overallReplyRate } =
+    computeCampaignListStats(list)
 
   return (
     <div className="animate-fade-in">
@@ -53,7 +46,7 @@ export default async function CampaignsPage() {
               { label: 'Campaigns', value: list.length },
               { label: 'Emails sent', value: totalSent },
               { label: 'Replies', value: totalReplied },
-              { label: 'Reply rate', value: `${overallRate}%` },
+              { label: 'Reply rate', value: `${overallReplyRate}%` },
               { label: 'Conversions', value: totalConversions },
             ]}
           />
